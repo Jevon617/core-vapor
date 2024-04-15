@@ -1,4 +1,4 @@
-import { isArray } from '@vue/shared'
+import { extend, isArray } from '@vue/shared'
 import type { CodegenContext } from '../generate'
 import type { CreateComponentIRNode, IRProp } from '../ir'
 import {
@@ -11,18 +11,16 @@ import {
 } from './utils'
 import { genExpression } from './expression'
 import { genPropKey } from './prop'
+import { createSimpleExpression } from '@vue/compiler-dom'
 
 // TODO: generate component slots
 export function genCreateComponent(
   oper: CreateComponentIRNode,
   context: CodegenContext,
 ): CodeFragment[] {
-  const { vaporHelper } = context
+  const { helper, vaporHelper } = context
 
-  const tag = oper.resolve
-    ? genCall(vaporHelper('resolveComponent'), JSON.stringify(oper.tag))
-    : [oper.tag]
-
+  const tag = genTag()
   const isRoot = oper.root
   const props = genProps()
 
@@ -37,6 +35,17 @@ export function genCreateComponent(
     ),
   ]
 
+  function genTag() {
+    if (oper.resolve) {
+      return genCall(vaporHelper('resolveComponent'), JSON.stringify(oper.tag))
+    } else {
+      return genExpression(
+        extend(createSimpleExpression(oper.tag, false), { ast: null }),
+        context,
+      )
+    }
+  }
+
   function genProps() {
     const props = oper.props
       .map(props => {
@@ -44,7 +53,9 @@ export function genCreateComponent(
           if (!props.length) return undefined
           return genStaticProps(props)
         } else {
-          return ['() => (', ...genExpression(props, context), ')']
+          let expr = genExpression(props.value, context)
+          if (props.handler) expr = genCall(helper('toHandlers'), expr)
+          return ['() => (', ...expr, ')']
         }
       })
       .filter(Boolean)

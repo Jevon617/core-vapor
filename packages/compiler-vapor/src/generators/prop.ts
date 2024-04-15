@@ -65,7 +65,7 @@ export function genDynamicProps(
         props =>
           Array.isArray(props)
             ? genLiteralObjectProps(props, context) // static and dynamic arg props
-            : genExpression(props, context), // v-bind="{}"
+            : genExpression(props.value, context), // v-bind=""
       ),
     ),
   ]
@@ -86,7 +86,7 @@ function genLiteralObjectProps(
 }
 
 export function genPropKey(
-  { key: node, runtimeCamelize, modifier }: IRProp,
+  { key: node, modifier, runtimeCamelize, runtimeHandler }: IRProp,
   context: CodegenContext,
 ): CodeFragment[] {
   const { helper } = context
@@ -104,13 +104,14 @@ export function genPropKey(
     ]
   }
 
-  const key = genExpression(node, context)
-  return [
-    '[',
-    modifier && `${JSON.stringify(modifier)} + `,
-    ...(runtimeCamelize ? genCall(helper('camelize'), key) : key),
-    ']',
-  ]
+  let key = genExpression(node, context)
+  if (runtimeCamelize) {
+    key = genCall(helper('camelize'), key)
+  }
+  if (runtimeHandler) {
+    key = genCall(helper('toHandlerKey'), key)
+  }
+  return ['[', modifier && `${JSON.stringify(modifier)} + `, ...key, ']']
 }
 
 function genPropValue(values: SimpleExpressionNode[], context: CodegenContext) {
